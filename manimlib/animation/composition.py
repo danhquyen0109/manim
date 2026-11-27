@@ -17,6 +17,7 @@ AnimationType = Union[Animation, _AnimationBuilder]
 if TYPE_CHECKING:
     from typing import Callable, Optional
 
+    from manimlib.animation.animation import SoundEffect
     from manimlib.mobject.mobject import Mobject
     from manimlib.scene.scene import Scene
 
@@ -119,6 +120,23 @@ class AnimationGroup(Animation):
                 sub_alpha = clip((time - start_time) / anim_time, 0, 1)
             anim.interpolate(sub_alpha)
 
+    def get_sfx_timings(self) -> list[tuple[SoundEffect, float, float | None]]:
+        result = super().get_sfx_timings()
+        if self.max_end_time == 0:
+            return result
+
+        def to_outer(inner_time):
+            return self.spanned_alpha_to_time(inner_time / self.max_end_time)
+
+        for anim, start_time, _ in self.anims_with_timings:
+            for sfx, start, end in anim.get_sfx_timings():
+                result.append((
+                    sfx,
+                    to_outer(start_time + start),
+                    None if end is None else to_outer(start_time + end),
+                ))
+        return result
+
 
 class Succession(AnimationGroup):
     def __init__(
@@ -152,6 +170,21 @@ class Succession(AnimationGroup):
             animation.begin()
             self.active_animation = animation
         animation.interpolate(subalpha)
+
+    def get_sfx_timings(self) -> list[tuple[SoundEffect, float, float | None]]:
+        # Each sub-animation gets an equal share of the time, see interpolate
+        result = Animation.get_sfx_timings(self)
+        n = len(self.animations)
+        for index, anim in enumerate(self.animations):
+            run_time = anim.get_run_time()
+
+            def to_outer(time):
+                sub_alpha = time / run_time if run_time > 0 else 0
+                return self.spanned_alpha_to_time((index + sub_alpha) / n)
+
+            for sfx, start, end in anim.get_sfx_timings():
+                result.append((sfx, to_outer(start), None if end is None else to_outer(end)))
+        return result
 
 
 class LaggedStart(AnimationGroup):

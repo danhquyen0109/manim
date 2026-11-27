@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from dataclasses import dataclass
 
 from manimlib.mobject.mobject import _AnimationBuilder
 from manimlib.mobject.mobject import Mobject
@@ -18,6 +19,19 @@ if TYPE_CHECKING:
 
 DEFAULT_ANIMATION_RUN_TIME = 1.0
 DEFAULT_ANIMATION_LAG_RATIO = 0
+
+
+@dataclass
+class SoundEffect:
+    sound_file: str
+    start: float = 0.0
+    end: float | None = None
+    relative: bool = False
+    clip_start: float = 0.0
+    gain: float | None = None
+    gain_to_background: float | None = None
+    fade_in: float = 0.0
+    fade_out: float = 0.0
 
 
 class Animation(object):
@@ -52,6 +66,7 @@ class Animation(object):
         self.final_alpha_value = final_alpha_value
         self.lag_ratio = lag_ratio
         self.suspend_mobject_updating = suspend_mobject_updating
+        self.sound_effects: list[SoundEffect] = []
 
     def _validate_input_type(self, mobject: Mobject) -> None:
         if not isinstance(mobject, Mobject):
@@ -232,6 +247,59 @@ class Animation(object):
 
     def is_remover(self) -> bool:
         return self.remover
+
+    # Sound effects
+    def add_sfx(
+        self,
+        sound_file: str,
+        start: float = 0.0,
+        end: float | None = None,
+        relative: bool = False,
+        clip_start: float = 0.0,
+        gain: float | None = None,
+        gain_to_background: float | None = None,
+        fade_in: float = 0.0,
+        fade_out: float = 0.0,
+    ):
+        """
+        Attach a sound effect, played when this animation is played in a scene.
+
+        start, end: when the sound starts and is cut off, in seconds from the
+            beginning of this animation. With end=None the whole sound plays.
+            If relative is True, they are instead fractions of the run time,
+            e.g. start=0.5, end=1 covers the second half of the animation.
+        clip_start: seconds to skip at the beginning of the sound file.
+        gain: volume change in dB.
+        fade_in, fade_out: fade durations in seconds.
+        """
+        if start < 0:
+            raise ValueError("Sound effect start must be >= 0")
+        if end is not None and end <= start:
+            raise ValueError("Sound effect end must be greater than start")
+        self.sound_effects.append(SoundEffect(
+            sound_file, start, end, relative, clip_start,
+            gain, gain_to_background, fade_in, fade_out,
+        ))
+        return self
+
+    def get_sfx_timings(self) -> list[tuple[SoundEffect, float, float | None]]:
+        """
+        Triplets (sound_effect, start, end), with times in seconds from the
+        beginning of this animation, including those of any sub-animations
+        """
+        result = []
+        for sfx in self.sound_effects:
+            scale = self.get_run_time() if sfx.relative else 1
+            end = None if sfx.end is None else sfx.end * scale
+            result.append((sfx, sfx.start * scale, end))
+        return result
+
+    def spanned_alpha_to_time(self, alpha: float) -> float:
+        """Inverse of time_spanned_alpha, expressed in seconds"""
+        if self.time_span is not None:
+            start, end = self.time_span
+            return start + alpha * (end - start)
+        return alpha * self.run_time
 
 
 def prepare_animation(anim: Animation | _AnimationBuilder):

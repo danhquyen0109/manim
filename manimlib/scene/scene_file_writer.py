@@ -171,12 +171,23 @@ class SceneFileWriter(object):
         sound_file: str,
         time: float | None = None,
         gain: float | None = None,
-        gain_to_background: float | None = None
+        gain_to_background: float | None = None,
+        clip_start: float = 0.0,
+        duration: float | None = None,
+        fade_in: float = 0.0,
+        fade_out: float = 0.0,
     ) -> None:
         file_path = get_full_sound_file_path(sound_file)
         new_segment = AudioSegment.from_file(file_path)
         if gain:
             new_segment = new_segment.apply_gain(gain)
+        start_ms = int(1000 * clip_start)
+        end_ms = None if duration is None else start_ms + int(1000 * duration)
+        new_segment = new_segment[start_ms:end_ms]
+        if fade_in > 0:
+            new_segment = new_segment.fade_in(int(1000 * fade_in))
+        if fade_out > 0:
+            new_segment = new_segment.fade_out(int(1000 * fade_out))
         self.add_audio_segment(new_segment, time, gain_to_background)
 
     # Writers

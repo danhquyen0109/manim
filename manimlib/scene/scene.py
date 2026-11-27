@@ -587,6 +587,7 @@ class Scene(object):
             anim.update_rate_info(run_time, rate_func, lag_ratio)
         self.pre_play()
         self.begin_animations(animations)
+        self.add_animation_sfx(animations)
         self.progress_through_animations(animations)
         self.finish_animations(animations)
         self.post_play()
@@ -651,6 +652,24 @@ class Scene(object):
             return
         time = self.get_time() + time_offset
         self.file_writer.add_sound(sound_file, time, gain, gain_to_background)
+
+    def add_animation_sfx(self, animations: Iterable[Animation]) -> None:
+        """Schedule the sound effects attached to animations about to be played"""
+        if self.skip_animations:
+            return
+        now = self.get_time()
+        for animation in animations:
+            for sfx, start, end in animation.get_sfx_timings():
+                self.file_writer.add_sound(
+                    sfx.sound_file,
+                    now + start,
+                    gain=sfx.gain,
+                    gain_to_background=sfx.gain_to_background,
+                    clip_start=sfx.clip_start,
+                    duration=None if end is None else end - start,
+                    fade_in=sfx.fade_in,
+                    fade_out=sfx.fade_out,
+                )
 
     # Helpers for interactive development
 
